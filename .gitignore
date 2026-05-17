@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+.vercel
+.vite
+gcp-key.json
+service-account*.json

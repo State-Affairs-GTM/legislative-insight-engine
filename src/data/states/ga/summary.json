@@ -1,0 +1,82 @@
+{
+  "abbr": "GA",
+  "name": "Georgia",
+  "assembly_name": "158th General Assembly",
+  "session_label": "2025-2026 Regular Session",
+  "session_status": "in-session",
+  "legislature_url": "https://www.legis.ga.gov/",
+  "state_id_internal": 10,
+  "biennium": "2025-2026",
+
+  "total_bills": 11770,
+  "became_law": 1098,
+  "vetoed": 6,
+  "still_active": 4823,
+  "unique_sponsors": 236,
+  "recorded_votes": 8540,
+  "consent_pct": 38.4,
+
+  "coverage_overall": "good",
+  "coverage_overall_label": "Strong",
+
+  "funnel": {
+    "stages": [
+      { "key": "introduced", "label": "Introduced" },
+      { "key": "stuck",      "label": "Stuck in 1st", "subtitle": "filed but no chamber passage" },
+      { "key": "engrossed",  "label": "Engrossed",    "subtitle": "passed 1, still in 2nd" },
+      { "key": "passed",     "label": "Became Law" }
+    ],
+    "tracks": [
+      {
+        "chamber": "House",
+        "rows": [
+          { "type": "Bills",         "counts": { "introduced": 4862, "stuck": 3294, "engrossed": 845, "passed": 723 } },
+          { "type": "Resolutions",   "counts": { "introduced": 1106, "stuck":  47,  "engrossed":  21, "passed": 1038 } },
+          { "type": "Joint Res.",    "counts": { "introduced":  102, "stuck":  64,  "engrossed":  18, "passed":  20 } }
+        ]
+      },
+      {
+        "chamber": "Senate",
+        "rows": [
+          { "type": "Bills",         "counts": { "introduced": 2148, "stuck": 1487, "engrossed": 376, "passed": 285 } },
+          { "type": "Resolutions",   "counts": { "introduced":  543, "stuck":  18,  "engrossed":   8, "passed": 517 } },
+          { "type": "Joint Res.",    "counts": { "introduced":   46, "stuck":  29,  "engrossed":   7, "passed":  10 } }
+        ]
+      }
+    ]
+  },
+
+  "coverage_notes": [
+    {
+      "level": "good",
+      "text": "Member-level votes recorded on 100% of Senate and 99.8% of House substantive votes."
+    },
+    {
+      "level": "good",
+      "text": "Bill summaries available on 92.6% of bills; fallback to description/title for the rest."
+    },
+    {
+      "level": "good",
+      "text": "4,155 multi-version bills, 100% with per-version summaries — gut-and-replace detection viable."
+    },
+    {
+      "level": "partial",
+      "text": "Consent-calendar votes (38.4% of all roll calls) are excluded from bill-level partisanship scoring per methodology."
+    },
+    {
+      "level": "poor",
+      "text": "Curated event vocabulary (sa_history_action) not populated for GA; we use raw history_action + history_step."
+    },
+    {
+      "level": "poor",
+      "text": "Bill amendments table empty for GA — Georgia uses substitutes (new bill_text versions) rather than attached amendments."
+    }
+  ],
+
+  "_meta": {
+    "generated_at": "2026-05-17T00:00:00Z",
+    "generated_by": "seed (manual)",
+    "data_source": "Phase 0 inventory queries — pending real extraction",
+    "note": "Numbers in this file are partly extrapolated from Phase 0 inventory. The extract.mjs pipeline will replace this with real numbers."
+  }
+}

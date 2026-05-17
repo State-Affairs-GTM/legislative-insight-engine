@@ -1,0 +1,27 @@
+{
+  "name": "legislative-insight-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "extract": "node scripts/extract.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "lucide-react": "^0.469.0",
+    "recharts": "^2.13.3",
+    "d3": "^7.9.0",
+    "us-atlas": "^3.0.1",
+    "topojson-client": "^3.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.10",
+    "@google-cloud/bigquery": "^7.9.0"
+  }
+}
