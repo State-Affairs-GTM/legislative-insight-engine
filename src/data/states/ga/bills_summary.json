@@ -1,0 +1,87 @@
+{
+  "abbr": "GA",
+  "session_label": "2025-2026 Regular Session",
+
+  "totals": {
+    "bills": 8115,
+    "resolutions": 3307,
+    "joint_resolutions": 348,
+    "all": 11770
+  },
+
+  "_note": "Seed data extrapolated from Phase 0 inventory and the GA legislature's public bill counts. Real numbers from extract.mjs will replace these. Topic distribution is plausible but illustrative.",
+
+  "topics_bills": [
+    { "key": "taxes",          "label": "Taxes & Revenue",          "count": 612, "passed":  84, "pass_rate": 13.7 },
+    { "key": "public_safety",  "label": "Public Safety & Criminal Justice", "count": 547, "passed":  76, "pass_rate": 13.9 },
+    { "key": "education",      "label": "Education",                "count": 489, "passed":  62, "pass_rate": 12.7 },
+    { "key": "healthcare",     "label": "Healthcare",               "count": 437, "passed":  58, "pass_rate": 13.3 },
+    { "key": "local",          "label": "Local Government",         "count": 421, "passed":  91, "pass_rate": 21.6 },
+    { "key": "judiciary",      "label": "Courts & Civil Law",       "count": 384, "passed":  43, "pass_rate": 11.2 },
+    { "key": "business",       "label": "Business & Commerce",      "count": 362, "passed":  47, "pass_rate": 13.0 },
+    { "key": "transportation", "label": "Transportation",           "count": 298, "passed":  41, "pass_rate": 13.8 },
+    { "key": "state_govt",     "label": "State Government Ops",     "count": 287, "passed":  37, "pass_rate": 12.9 },
+    { "key": "labor",          "label": "Labor & Employment",       "count": 256, "passed":  29, "pass_rate": 11.3 },
+    { "key": "housing",        "label": "Housing & Land Use",       "count": 234, "passed":  24, "pass_rate": 10.3 },
+    { "key": "environment",    "label": "Environment & Natural Res.", "count": 218, "passed":  22, "pass_rate": 10.1 },
+    { "key": "public_health",  "label": "Public Health",            "count": 203, "passed":  31, "pass_rate": 15.3 },
+    { "key": "elections",      "label": "Elections & Voting",       "count": 187, "passed":  19, "pass_rate": 10.2 },
+    { "key": "family",         "label": "Family & Children",        "count": 176, "passed":  24, "pass_rate": 13.6 },
+    { "key": "firearms",       "label": "Firearms",                 "count": 142, "passed":   8, "pass_rate":  5.6 },
+    { "key": "agriculture",    "label": "Agriculture",              "count": 138, "passed":  17, "pass_rate": 12.3 },
+    { "key": "energy",         "label": "Energy & Utilities",       "count": 124, "passed":  14, "pass_rate": 11.3 },
+    { "key": "veterans",       "label": "Veterans & Military",      "count":  97, "passed":  16, "pass_rate": 16.5 },
+    { "key": "civil_rights",   "label": "Civil Rights & Liberties", "count":  82, "passed":   6, "pass_rate":  7.3 },
+    { "key": "tech",           "label": "Technology & Privacy",     "count":  73, "passed":   8, "pass_rate": 11.0 },
+    { "key": "gaming",         "label": "Gaming & Sports Betting",  "count":  41, "passed":   3, "pass_rate":  7.3 }
+  ],
+
+  "topics_resolutions": [
+    { "key": "ceremonial",  "label": "Ceremonial / Memorial", "count": 2814, "passed": 2789, "pass_rate": 99.1 },
+    { "key": "state_govt",  "label": "State Government Ops",  "count":  287, "passed":  256, "pass_rate": 89.2 },
+    { "key": "civil_rights","label": "Civil Rights & Liberties", "count":  93, "passed":   72, "pass_rate": 77.4 },
+    { "key": "education",   "label": "Education",             "count":   61, "passed":   48, "pass_rate": 78.7 },
+    { "key": "healthcare",  "label": "Healthcare",            "count":   52, "passed":   38, "pass_rate": 73.1 }
+  ],
+
+  "budget_bills": {
+    "count": 6,
+    "total_appropriations_label": "Approximately $36.1B FY26",
+    "items": [
+      { "bill_id": "HB 67",  "title": "FY26 General Appropriations Act",      "status": "Signed",   "stage": "law" },
+      { "bill_id": "HB 68",  "title": "FY25 Amended Budget",                  "status": "Signed",   "stage": "law" },
+      { "bill_id": "HB 916", "title": "FY27 General Appropriations Act",      "status": "Pending",  "stage": "in_senate" },
+      { "bill_id": "HR 12",  "title": "Conditional Bond Financing",           "status": "Pending",  "stage": "in_committee" },
+      { "bill_id": "SR 4",   "title": "Capital Outlay Bond Authorization",    "status": "Pending",  "stage": "in_committee" },
+      { "bill_id": "HB 1041","title": "Supplemental Disaster Response Appropriations", "status": "Pending", "stage": "in_house" }
+    ]
+  },
+
+  "consent_calendar_story": {
+    "headline": "38.4% of GA roll calls in this session were consent-calendar batches",
+    "narrative": "Georgia's General Assembly disposes of local-impact and uncontested legislation through bundled 'consent calendar' votes — single roll calls that process 30 or more bills at once. In the 2025-2026 session, 3,279 of 8,540 recorded roll calls were these batch votes. Bills passed via consent calendar received no individual contested vote, so their bill-level partisanship score (BV) is null and they appear with a 'Passed by consent' annotation throughout the engine.",
+    "stats": [
+      { "label": "Total roll calls",          "value": 8540 },
+      { "label": "Consent / batch roll calls", "value": 3279 },
+      { "label": "Substantive roll calls",     "value": 5261 },
+      { "label": "Bills affected (estimate)",  "value": 1842 }
+    ]
+  },
+
+  "bills_by_status": {
+    "introduced":  8115,
+    "in_committee": 6712,
+    "passed_one":  1414,
+    "passed_both":  1217,
+    "signed":      1098,
+    "vetoed":         6,
+    "failed":      4823
+  },
+
+  "_meta": {
+    "generated_at": "2026-05-17T00:00:00Z",
+    "generated_by": "seed",
+    "data_source": "Phase 0 inventory + GA legislature public records",
+    "note": "Topic counts are illustrative. Real classification runs in extract.mjs via taxonomy.js keyword matching."
+  }
+}

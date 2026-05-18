@@ -49,7 +49,13 @@ export default function Methodology() {
         We always split these. A "passage rate" that lumps them together is misleading because resolutions
         (especially ceremonial ones) pass at near-100% rates and bills don't. We further split resolutions into
         sub-types (joint, concurrent, ceremonial, memorial) where states distinguish them.
-        Ceremonial resolutions are excluded by default from partisanship calculations.
+        <br /><br />
+        <strong>Partisanship scoring applies only to substantive Bills</strong>, never to Resolutions or
+        Joint Resolutions. Ceremonial resolutions ("Honoring Coach Smith," "Recognizing November as X Awareness Month")
+        are functionally non-partisan and their inclusion would distort scoring distributions. Joint Resolutions
+        often handle constitutional or procedural matters where the partisan signal doesn't map to policy
+        positioning. Resolutions get their own treatment — volume, pass rate, sub-type breakdown — but no
+        BS/BV/CG scores attached.
       </Block>
 
       <Block title="Topic Classification">

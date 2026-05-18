@@ -2,18 +2,18 @@ import { useParams } from 'react-router-dom';
 import { useStateData } from '../lib/useStateData.js';
 import StateHeader from '../components/layout/StateHeader.jsx';
 import AtAGlanceSection from '../components/insights/AtAGlanceSection.jsx';
+import BillsSection from '../components/insights/BillsSection.jsx';
 import Section from '../components/shared/Section.jsx';
 import {
-  ScrollText, CheckSquare, Users2, PenTool, Scale,
+  CheckSquare, Users2, PenTool, Scale,
   CalendarClock, HeartHandshake, RefreshCw, History, BookOpen,
 } from 'lucide-react';
 
 const PLACEHOLDER_SECTIONS = [
-  { key: 'bills',         title: 'Bills',                  icon: ScrollText,     phase: 'Next up' },
-  { key: 'votes',         title: 'Votes',                  icon: CheckSquare,    phase: 'Phase 1' },
+  { key: 'votes',         title: 'Votes',                  icon: CheckSquare,    phase: 'Next up' },
+  { key: 'partisanship',  title: 'Partisanship',           icon: Scale,          phase: 'Next up' },
   { key: 'committees',    title: 'Committees',             icon: Users2,         phase: 'Phase 1' },
   { key: 'sponsorship',   title: 'Sponsorship',            icon: PenTool,        phase: 'Phase 1' },
-  { key: 'partisanship',  title: 'Partisanship',           icon: Scale,          phase: 'Phase 1' },
   { key: 'timeline',      title: 'Timeline',               icon: CalendarClock,  phase: 'Phase 1' },
   { key: 'partners',      title: 'Legislator Partners',    icon: HeartHandshake, phase: 'Phase 1' },
   { key: 'gut-replace',   title: 'Gut & Replace',          icon: RefreshCw,      phase: 'Phase 1' },
@@ -25,6 +25,7 @@ export default function StatePage() {
   const { abbr } = useParams();
   const abbrUpper = abbr?.toUpperCase();
   const { data: summary, loading, error } = useStateData(abbrUpper, 'summary');
+  const { data: billsSummary } = useStateData(abbrUpper, 'bills_summary');
 
   if (loading) return <Loading />;
   if (error || !summary) return <NotYetAvailable abbr={abbrUpper} />;
@@ -33,6 +34,7 @@ export default function StatePage() {
     <>
       <StateHeader summary={summary} />
       <AtAGlanceSection summary={summary} />
+      <BillsSection abbr={abbrUpper} data={billsSummary} />
       {PLACEHOLDER_SECTIONS.map((s) => (
         <Section
           key={s.key}

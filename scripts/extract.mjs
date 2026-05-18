@@ -329,11 +329,213 @@ function inferSessionStatus(session) {
   return 'in-session';
 }
 
+// ---------- 3: bills detail extraction (topics, budget, consent calendar) ----------
+
+import TAXONOMY from '../src/data/reference/taxonomy.js';
+
+async function extractBills({ session_ids }) {
+  console.log('▶ Extracting bills detail (topics, budget, consent calendar)...');
+
+  // 3.1 — Pull all bills with classification-relevant fields
+  const billRows = await query(`
+    SELECT
+      b.bill_id,
+      b.bill_number,
+      b.title,
+      b.description,
+      b.summary,
+      b.bill_type_id,
+      b.body_id,
+      b.is_failed,
+      b.is_active,
+      b.is_vetoed,
+      bt.bill_type_name
+    FROM \`${DATASET}.bill\` b
+    LEFT JOIN \`${DATASET}.type\` bt ON bt.bill_type_id = b.bill_type_id
+    WHERE b.session_id IN UNNEST(@session_ids)
+      AND b._fivetran_deleted IS NOT TRUE
+  `, { session_ids });
+
+  // 3.2 — Get which bills became law (joined separately for performance)
+  const lawRows = await query(`
+    SELECT DISTINCT bh.bill_id
+    FROM \`${DATASET}.bill_history\` bh
+    WHERE bh.bill_id IN (
+      SELECT bill_id FROM \`${DATASET}.bill\`
+      WHERE session_id IN UNNEST(@session_ids)
+    )
+    AND LOWER(bh.history_action) LIKE '%signed by governor%'
+    AND bh._fivetran_deleted IS NOT TRUE
+  `, { session_ids });
+  const lawSet = new Set(lawRows.map((r) => r.bill_id));
+
+  // 3.3 — Vote counts for consent-calendar story
+  const voteCounts = await query(`
+    WITH scoped AS (
+      SELECT bv.id, bv.roll_call_desc, bv.bill_id
+      FROM \`${DATASET}.bill_vote\` bv
+      JOIN \`${DATASET}.bill\` b ON bv.bill_id = b.bill_id
+      WHERE b.session_id IN UNNEST(@session_ids)
+        AND bv._fivetran_deleted IS NOT TRUE
+        AND b._fivetran_deleted IS NOT TRUE
+    )
+    SELECT
+      COUNT(*) AS total_rollcalls,
+      COUNTIF(is_consent(roll_call_desc)) AS consent_rollcalls,
+      COUNT(DISTINCT IF(is_consent(roll_call_desc), bill_id, NULL)) AS bills_in_consent
+    FROM scoped, UNNEST([STRUCT(roll_call_desc AS roll_call_desc)])
+  `, { session_ids }).catch(async () => {
+    // BQ doesn't allow function `is_consent` here — fall back to inline patterns
+    return await query(`
+      WITH scoped AS (
+        SELECT bv.id, bv.roll_call_desc, bv.bill_id,
+          IF(
+            LOWER(bv.roll_call_desc) LIKE '%consent calendar%'
+            OR LOWER(bv.roll_call_desc) LIKE '%local calendar%'
+            OR LOWER(bv.roll_call_desc) LIKE '%motion to engross%'
+            OR LOWER(bv.roll_call_desc) LIKE '%motion to table remaining%'
+            OR LOWER(bv.roll_call_desc) LIKE '%uncontested%',
+            TRUE, FALSE
+          ) AS is_consent
+        FROM \`${DATASET}.bill_vote\` bv
+        JOIN \`${DATASET}.bill\` b ON bv.bill_id = b.bill_id
+        WHERE b.session_id IN UNNEST(@session_ids)
+          AND bv._fivetran_deleted IS NOT TRUE
+          AND b._fivetran_deleted IS NOT TRUE
+      )
+      SELECT
+        COUNT(*) AS total_rollcalls,
+        COUNTIF(is_consent) AS consent_rollcalls,
+        COUNT(DISTINCT IF(is_consent, bill_id, NULL)) AS bills_in_consent
+      FROM scoped
+    `, { session_ids });
+  });
+  const vc = voteCounts[0];
+
+  // 3.4 — Classify topics
+  const billsByType = { Bills: [], Resolutions: [], 'Joint Res.': [] };
+  for (const b of billRows) {
+    const type = classifyBillType(b.bill_type_name);
+    billsByType[type].push(b);
+  }
+
+  const topicsBills = classifyTopics(billsByType.Bills, lawSet);
+  const topicsResolutions = classifyTopics(
+    [...billsByType.Resolutions, ...billsByType['Joint Res.']],
+    lawSet,
+    /* resolutionsMode */ true
+  );
+
+  // 3.5 — Budget bills (heuristic: title or summary mentions appropriations / general fund / budget)
+  const budgetBills = billRows
+    .filter((b) => {
+      const text = `${b.title || ''} ${b.summary || ''}`.toLowerCase();
+      return (
+        text.includes('appropriations act')
+        || text.includes('general appropriations')
+        || text.includes('amended budget')
+        || text.includes('supplemental appropriations')
+        || text.includes('bond financing')
+        || text.includes('capital outlay')
+      );
+    })
+    .slice(0, 12)
+    .map((b) => ({
+      bill_id: b.bill_number,
+      title: b.title || b.description || '(no title)',
+      status: lawSet.has(b.bill_id) ? 'Signed' : (b.is_vetoed ? 'Vetoed' : (b.is_failed ? 'Failed' : 'Pending')),
+      stage: lawSet.has(b.bill_id) ? 'law' : 'in_progress',
+    }));
+
+  // 3.6 — Totals by type
+  const totals = {
+    bills: billsByType.Bills.length,
+    resolutions: billsByType.Resolutions.length,
+    joint_resolutions: billsByType['Joint Res.'].length,
+    all: billRows.length,
+  };
+
+  const data = {
+    abbr: STATE_ABBR,
+    session_label: SESSION_PATTERN,
+    totals,
+    topics_bills: topicsBills,
+    topics_resolutions: topicsResolutions,
+    budget_bills: {
+      count: budgetBills.length,
+      total_appropriations_label: 'See individual bills for appropriations totals',
+      items: budgetBills,
+    },
+    consent_calendar_story: {
+      headline: `${pct(vc.consent_rollcalls, vc.total_rollcalls)}% of ${STATE_ABBR} roll calls in this session were consent-calendar batches`,
+      narrative: `${STATE_ABBR}'s legislature disposes of local-impact and uncontested legislation through bundled "consent calendar" votes — single roll calls that process multiple bills at once. In this session, ${vc.consent_rollcalls.toLocaleString()} of ${vc.total_rollcalls.toLocaleString()} recorded roll calls were these batch votes. Bills passed via consent calendar received no individual contested vote, so their bill-level partisanship score (BV) is null and they appear with a "Passed by consent" annotation throughout the engine.`,
+      stats: [
+        { label: 'Total roll calls',           value: vc.total_rollcalls },
+        { label: 'Consent / batch roll calls', value: vc.consent_rollcalls },
+        { label: 'Substantive roll calls',     value: vc.total_rollcalls - vc.consent_rollcalls },
+        { label: 'Bills affected',             value: vc.bills_in_consent },
+      ],
+    },
+    bills_by_status: {
+      introduced: billsByType.Bills.length,
+      signed:     billsByType.Bills.filter((b) => lawSet.has(b.bill_id)).length,
+      vetoed:     billsByType.Bills.filter((b) => b.is_vetoed).length,
+      failed:     billsByType.Bills.filter((b) => b.is_failed).length,
+    },
+    _meta: {
+      generated_at: new Date().toISOString(),
+      generated_by: 'scripts/extract.mjs',
+      data_source: `BigQuery ${DATASET}`,
+    },
+  };
+
+  await writeJson('bills_summary.json', data);
+}
+
+function classifyTopics(bills, lawSet, resolutionsMode = false) {
+  // Apply taxonomy keyword matching. Track top topics.
+  // Each bill can match multiple topics.
+  const counts = {};
+  const passed = {};
+
+  for (const b of bills) {
+    const text = `${b.summary || ''} ${b.description || ''} ${b.title || ''}`.toLowerCase();
+    if (!text.trim()) continue;
+    const matchedKeys = new Set();
+    for (const topic of TAXONOMY) {
+      for (const kw of topic.keywords) {
+        if (text.includes(kw)) { matchedKeys.add(topic.key); break; }
+      }
+    }
+    for (const key of matchedKeys) {
+      counts[key] = (counts[key] || 0) + 1;
+      if (lawSet.has(b.bill_id)) passed[key] = (passed[key] || 0) + 1;
+    }
+  }
+
+  const topicsOut = TAXONOMY
+    .map((t) => {
+      const count = counts[t.key] || 0;
+      const passedCount = passed[t.key] || 0;
+      const passRate = count ? Math.round((passedCount / count) * 1000) / 10 : 0;
+      return { key: t.key, label: t.label, count, passed: passedCount, pass_rate: passRate };
+    })
+    .filter((t) => {
+      // In bills mode, show top topics. In resolutions mode, focus on ceremonial/state ops.
+      if (resolutionsMode) return t.count >= 10;
+      return t.count >= 30;
+    })
+    .sort((a, b) => b.count - a.count);
+
+  return topicsOut;
+}
+
 // ---------- main ----------
 async function main() {
   const scope = await resolveScope();
   await extractSummary(scope);
-  // TODO: extractBills, extractLegislators, extractVotes, extractHistory,
+  await extractBills(scope);
+  // TODO: extractLegislators, extractVotes, extractHistory,
   // extractCommittees, extractBestBuddies, extractGutReplace, extractHistorical
   console.log('✓ Extraction complete');
 }

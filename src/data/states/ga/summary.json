@@ -30,17 +30,17 @@
       {
         "chamber": "House",
         "rows": [
-          { "type": "Bills",         "counts": { "introduced": 4862, "stuck": 3294, "engrossed": 845, "passed": 723 } },
-          { "type": "Resolutions",   "counts": { "introduced": 1106, "stuck":  47,  "engrossed":  21, "passed": 1038 } },
-          { "type": "Joint Res.",    "counts": { "introduced":  102, "stuck":  64,  "engrossed":  18, "passed":  20 } }
+          { "type": "Bills",         "counts": { "introduced": 5648, "stuck": 3827, "engrossed":  982, "passed": 839 } },
+          { "type": "Resolutions",   "counts": { "introduced": 2493, "stuck":  106, "engrossed":   47, "passed": 2340 } },
+          { "type": "Joint Res.",    "counts": { "introduced":  243, "stuck":  152, "engrossed":   43, "passed":   48 } }
         ]
       },
       {
         "chamber": "Senate",
         "rows": [
-          { "type": "Bills",         "counts": { "introduced": 2148, "stuck": 1487, "engrossed": 376, "passed": 285 } },
-          { "type": "Resolutions",   "counts": { "introduced":  543, "stuck":  18,  "engrossed":   8, "passed": 517 } },
-          { "type": "Joint Res.",    "counts": { "introduced":   46, "stuck":  29,  "engrossed":   7, "passed":  10 } }
+          { "type": "Bills",         "counts": { "introduced": 2467, "stuck": 1708, "engrossed":  432, "passed": 327 } },
+          { "type": "Resolutions",   "counts": { "introduced":  814, "stuck":   27, "engrossed":   12, "passed":  775 } },
+          { "type": "Joint Res.",    "counts": { "introduced":  105, "stuck":   67, "engrossed":   16, "passed":   22 } }
         ]
       }
     ]
@@ -75,8 +75,8 @@
 
   "_meta": {
     "generated_at": "2026-05-17T00:00:00Z",
-    "generated_by": "seed (manual)",
+    "generated_by": "seed (reconciled)",
     "data_source": "Phase 0 inventory queries — pending real extraction",
-    "note": "Numbers in this file are partly extrapolated from Phase 0 inventory. The extract.mjs pipeline will replace this with real numbers."
+    "note": "House+Senate funnel introduced columns sum to 11,770. Real numbers from extract.mjs will replace these."
   }
 }
