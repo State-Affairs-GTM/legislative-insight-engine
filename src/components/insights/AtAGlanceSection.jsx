@@ -1,7 +1,7 @@
 import { BarChart3, FileText, ScrollText } from 'lucide-react';
 import Section from '../shared/Section.jsx';
 import HeadlineRow from './HeadlineRow.jsx';
-import BillFunnel from './BillFunnel.jsx';
+import BillSankey from './BillSankey.jsx';
 import CoverageBadge from './CoverageBadge.jsx';
 
 export default function AtAGlanceSection({ summary }) {
@@ -69,7 +69,7 @@ export default function AtAGlanceSection({ summary }) {
             style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>
             Bill Flow by Chamber & Type
           </div>
-          <BillFunnel funnel={summary.funnel} />
+          <BillSankey funnel={summary.funnel} />
         </>
       )}
 

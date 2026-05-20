@@ -30,7 +30,7 @@
       {
         "chamber": "House",
         "rows": [
-          { "type": "Bills",         "counts": { "introduced": 5648, "stuck": 3827, "engrossed":  982, "passed": 839 } },
+          { "type": "Bills", "counts": { "introduced": 5648, "stuck": 3827, "engrossed": 982, "passed": 833, "vetoed": 6, "override_passed": 0 } },
           { "type": "Resolutions",   "counts": { "introduced": 2493, "stuck":  106, "engrossed":   47, "passed": 2340 } },
           { "type": "Joint Res.",    "counts": { "introduced":  243, "stuck":  152, "engrossed":   43, "passed":   48 } }
         ]
