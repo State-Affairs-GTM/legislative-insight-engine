@@ -3,6 +3,7 @@ import { useStateData } from '../lib/useStateData.js';
 import StateHeader from '../components/layout/StateHeader.jsx';
 import AtAGlanceSection from '../components/insights/AtAGlanceSection.jsx';
 import BillsSection from '../components/insights/BillsSection.jsx';
+import LegislatorPairsSection from '../components/insights/LegislatorPairsSection.jsx';
 import Section from '../components/shared/Section.jsx';
 import {
   CheckSquare, Users2, PenTool, Scale,
@@ -15,7 +16,6 @@ const PLACEHOLDER_SECTIONS = [
   { key: 'committees',    title: 'Committees',             icon: Users2,         phase: 'Phase 1' },
   { key: 'sponsorship',   title: 'Sponsorship',            icon: PenTool,        phase: 'Phase 1' },
   { key: 'timeline',      title: 'Timeline',               icon: CalendarClock,  phase: 'Phase 1' },
-  { key: 'partners',      title: 'Legislator Partners',    icon: HeartHandshake, phase: 'Phase 1' },
   { key: 'gut-replace',   title: 'Gut & Replace',          icon: RefreshCw,      phase: 'Phase 1' },
   { key: 'history',       title: 'Historical Context',     icon: History,        phase: 'Phase 1' },
   { key: 'nuances',       title: 'State-Specific Nuances', icon: BookOpen,       phase: 'Phase 1' },
@@ -35,6 +35,7 @@ export default function StatePage() {
       <StateHeader summary={summary} />
       <AtAGlanceSection summary={summary} />
       <BillsSection abbr={abbrUpper} data={billsSummary} />
+      <LegislatorPairsSection abbr={abbrUpper} />
       {PLACEHOLDER_SECTIONS.map((s) => (
         <Section
           key={s.key}
