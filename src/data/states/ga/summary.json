@@ -7,45 +7,85 @@
   "legislature_url": "https://www.legis.ga.gov/",
   "state_id_internal": 10,
   "biennium": "2025-2026",
-
-  "total_bills": 11770,
-  "became_law": 1098,
-  "vetoed": 6,
-  "still_active": 4823,
-  "unique_sponsors": 236,
+  "total_bills": 5480,
+  "became_law": 3545,
+  "vetoed": 19,
+  "still_active": 0,
+  "unique_sponsors": 242,
   "recorded_votes": 8540,
   "consent_pct": 38.4,
-
   "coverage_overall": "good",
   "coverage_overall_label": "Strong",
-
   "funnel": {
     "stages": [
-      { "key": "introduced", "label": "Introduced" },
-      { "key": "stuck",      "label": "Stuck in 1st", "subtitle": "filed but no chamber passage" },
-      { "key": "engrossed",  "label": "Engrossed",    "subtitle": "passed 1, still in 2nd" },
-      { "key": "passed",     "label": "Became Law" }
+      {
+        "key": "introduced",
+        "label": "Introduced"
+      },
+      {
+        "key": "stuck",
+        "label": "Stuck in 1st",
+        "subtitle": "filed but no chamber passage"
+      },
+      {
+        "key": "engrossed",
+        "label": "Engrossed",
+        "subtitle": "passed 1, still in 2nd"
+      },
+      {
+        "key": "passed",
+        "label": "Became Law"
+      }
     ],
     "tracks": [
       {
         "chamber": "House",
         "rows": [
-          { "type": "Bills", "counts": { "introduced": 5648, "stuck": 3827, "engrossed": 982, "passed": 833, "vetoed": 6, "override_passed": 0 } },
-          { "type": "Resolutions",   "counts": { "introduced": 2493, "stuck":  106, "engrossed":   47, "passed": 2340 } },
-          { "type": "Joint Res.",    "counts": { "introduced":  243, "stuck":  152, "engrossed":   43, "passed":   48 } }
+          {
+            "type": "Bills",
+            "counts": {
+              "introduced": 1608,
+              "stuck": 895,
+              "engrossed": 176,
+              "passed": 525,
+              "vetoed": 12
+            }
+          },
+          {
+            "type": "Resolutions",
+            "counts": {
+              "introduced": 2132,
+              "stuck": 293,
+              "passed": 1839
+            }
+          }
         ]
       },
       {
         "chamber": "Senate",
         "rows": [
-          { "type": "Bills",         "counts": { "introduced": 2467, "stuck": 1708, "engrossed":  432, "passed": 327 } },
-          { "type": "Resolutions",   "counts": { "introduced":  814, "stuck":   27, "engrossed":   12, "passed":  775 } },
-          { "type": "Joint Res.",    "counts": { "introduced":  105, "stuck":   67, "engrossed":   16, "passed":   22 } }
+          {
+            "type": "Bills",
+            "counts": {
+              "introduced": 633,
+              "stuck": 337,
+              "engrossed": 106,
+              "passed": 183,
+              "vetoed": 7
+            }
+          },
+          {
+            "type": "Resolutions",
+            "counts": {
+              "introduced": 1107,
+              "stuck": 109,
+              "passed": 998
+            }
+          }
         ]
       }
     ]
   },
-
   "coverage_notes": [
     {
       "level": "good",
@@ -72,11 +112,11 @@
       "text": "Bill amendments table empty for GA — Georgia uses substitutes (new bill_text versions) rather than attached amendments."
     }
   ],
-
   "_meta": {
-    "generated_at": "2026-05-17T00:00:00Z",
-    "generated_by": "seed (reconciled)",
-    "data_source": "Phase 0 inventory queries — pending real extraction",
-    "note": "House+Senate funnel introduced columns sum to 11,770. Real numbers from extract.mjs will replace these."
+    "generated_at": "2026-05-20T20:24:54.288Z",
+    "generated_by": "scripts/transform_ga.mjs",
+    "data_source": "BigQuery (analytics_stg) via Metabase: 01_ga_funnel.sql + 02_ga_headlines.sql",
+    "note": "House+Senate funnel introduced columns sum to 11,770. Real numbers from extract.mjs will replace these.",
+    "session_id": 2167
   }
 }
