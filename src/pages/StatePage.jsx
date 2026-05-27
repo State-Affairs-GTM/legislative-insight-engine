@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useStateData } from '../lib/useStateData.js';
+import VotesSection from '../components/insights/VotesSection.jsx';
 import StateHeader from '../components/layout/StateHeader.jsx';
 import AtAGlanceSection from '../components/insights/AtAGlanceSection.jsx';
 import BillsSection from '../components/insights/BillsSection.jsx';
@@ -11,7 +12,6 @@ import {
 } from 'lucide-react';
 
 const PLACEHOLDER_SECTIONS = [
-  { key: 'votes',         title: 'Votes',                  icon: CheckSquare,    phase: 'Next up' },
   { key: 'partisanship',  title: 'Partisanship',           icon: Scale,          phase: 'Next up' },
   { key: 'committees',    title: 'Committees',             icon: Users2,         phase: 'Phase 1' },
   { key: 'sponsorship',   title: 'Sponsorship',            icon: PenTool,        phase: 'Phase 1' },
@@ -36,6 +36,7 @@ export default function StatePage() {
       <AtAGlanceSection summary={summary} />
       <BillsSection abbr={abbrUpper} data={billsSummary} />
       <LegislatorPairsSection abbr={abbrUpper} />
+      <VotesSection abbr={abbrUpper} />
       {PLACEHOLDER_SECTIONS.map((s) => (
         <Section
           key={s.key}
