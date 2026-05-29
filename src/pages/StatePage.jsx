@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 
 const PLACEHOLDER_SECTIONS = [
-  { key: 'partisanship',  title: 'Partisanship',           icon: Scale,          phase: 'Next up' },
   { key: 'committees',    title: 'Committees',             icon: Users2,         phase: 'Phase 1' },
   { key: 'sponsorship',   title: 'Sponsorship',            icon: PenTool,        phase: 'Phase 1' },
   { key: 'timeline',      title: 'Timeline',               icon: CalendarClock,  phase: 'Phase 1' },
