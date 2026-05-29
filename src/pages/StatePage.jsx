@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useStateData } from '../lib/useStateData.js';
 import VotesSection from '../components/insights/VotesSection.jsx';
+import SponsorshipSection from '../components/insights/SponsorshipSection.jsx';
 import StateHeader from '../components/layout/StateHeader.jsx';
 import AtAGlanceSection from '../components/insights/AtAGlanceSection.jsx';
 import BillsSection from '../components/insights/BillsSection.jsx';
@@ -37,6 +38,7 @@ export default function StatePage() {
       <BillsSection abbr={abbrUpper} data={billsSummary} />
       <LegislatorPairsSection abbr={abbrUpper} />
       <VotesSection abbr={abbrUpper} />
+      <SponsorshipSection abbr={abbr} />
       {PLACEHOLDER_SECTIONS.map((s) => (
         <Section
           key={s.key}

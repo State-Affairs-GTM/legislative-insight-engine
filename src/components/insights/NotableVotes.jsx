@@ -1,40 +1,51 @@
-// NotableVotes — editorial tab.
-// Five sub-sections: Closest / Big Defections / Mild Defections /
-// Same-Bill Reversals / Notable Resolutions.
+// NotableVotes v2 — adds two new sub-sections:
+//   * Failed Constitutional Amendments (passed simple majority, failed 2/3)
+//   * Amendment Defections (3+ defectors on a floor amendment)
 
 import { useState } from 'react';
-import { PartyDot, partyInitial, formatDate } from './VotesSection.jsx';
+import {
+  PartyDot, partyInitial, formatDate, CategoryBadge, formatPassageResult,
+} from './VotesSection.jsx';
 
 const SECTIONS = [
-  { key: 'closest',         label: 'Closest Votes',
-    desc: 'Bills decided by the slimmest margins — sometimes a single vote.' },
-  { key: 'big_defections',  label: 'Major Defections',
-    desc: 'Votes where 3+ legislators broke with their party on a clear party-position bill.' },
-  { key: 'mild_defections', label: 'Mild Defections',
-    desc: 'Votes where exactly 2 legislators broke with party. Worth watching.' },
-  { key: 'reversals',       label: 'Same-Bill Reversals',
-    desc: "Bills that flipped between Pass and Fail across multiple votes — usually amendment cycles." },
-  { key: 'resolutions',     label: 'Notable Resolutions',
-    desc: 'Resolutions where 3+ legislators voted Nay. Someone took a public stand.' },
+  { key: 'closest',          label: 'Closest Votes',
+    desc: 'Substantive bills decided by the slimmest margins.' },
+  { key: 'big_defections',   label: 'Major Defections',
+    desc: '3+ legislators broke with their party on a clear party-position bill (substantive votes).' },
+  { key: 'mild_defections',  label: 'Mild Defections',
+    desc: 'Exactly 2 legislators broke with their party on a substantive vote.' },
+  { key: 'amendment_defections', label: 'Amendment Defections',
+    desc: '3+ legislators broke with their party on a floor amendment. Different signal than substantive defections.' },
+  { key: 'failed_const',     label: 'Failed Const. Amendments',
+    desc: 'Constitutional amendments that got a simple majority but failed the required 2/3 supermajority. (E.g. HR 1114.)' },
+  { key: 'reversals',        label: 'Same-Bill Reversals',
+    desc: "Bills that flipped between Pass and Fail across substantive votes — usually amendment cycles." },
+  { key: 'resolutions',      label: 'Notable Resolutions',
+    desc: 'Resolutions where 3+ legislators voted Nay on the substantive adoption vote.' },
 ];
 
 export default function NotableVotes({ data }) {
   const [section, setSection] = useState('closest');
   const { notable } = data.overview;
 
+  // Hide a section if it's empty
+  const sectionCounts = {
+    closest:             notable.closest?.length || 0,
+    big_defections:      notable.big_defections?.length || 0,
+    mild_defections:     notable.mild_defections?.length || 0,
+    amendment_defections: notable.amendment_defections?.length || 0,
+    failed_const:        notable.failed_const_amendments?.length || 0,
+    reversals:           notable.same_bill_reversals?.length || 0,
+    resolutions:         notable.notable_resolutions?.length || 0,
+  };
+
   return (
     <div className="space-y-5">
-      {/* Sub-section nav */}
       <div className="flex flex-wrap gap-1.5">
         {SECTIONS.map((s) => {
           const isActive = s.key === section;
-          let count;
-          if (s.key === 'closest') count = notable.closest.length;
-          else if (s.key === 'big_defections') count = notable.big_defections.length;
-          else if (s.key === 'mild_defections') count = notable.mild_defections.length;
-          else if (s.key === 'reversals') count = notable.same_bill_reversals.length;
-          else if (s.key === 'resolutions') count = notable.notable_resolutions.length;
-
+          const count = sectionCounts[s.key];
+          if (count === 0) return null;
           return (
             <button key={s.key} onClick={() => setSection(s.key)}
               className="text-xs px-3 py-2 transition-colors"
@@ -52,36 +63,32 @@ export default function NotableVotes({ data }) {
         })}
       </div>
 
-      {/* Section subtitle */}
       <div className="text-xs italic" style={{ color: 'var(--ink-soft)' }}>
         {SECTIONS.find((s) => s.key === section)?.desc}
       </div>
 
-      {/* Content */}
-      {section === 'closest'         && <ClosestList votes={notable.closest} />}
-      {section === 'big_defections'  && <DefectionList votes={notable.big_defections} kind="major" />}
-      {section === 'mild_defections' && <DefectionList votes={notable.mild_defections} kind="mild" />}
-      {section === 'reversals'       && <ReversalsList reversals={notable.same_bill_reversals} />}
-      {section === 'resolutions'     && <NotableResolutionsList votes={notable.notable_resolutions} />}
+      {section === 'closest'              && <List votes={notable.closest} fmt={(v) => `Margin: ${Math.abs(v.yea - v.nay)} votes`} />}
+      {section === 'big_defections'       && <DefectionList votes={notable.big_defections} />}
+      {section === 'mild_defections'      && <DefectionList votes={notable.mild_defections} />}
+      {section === 'amendment_defections' && <DefectionList votes={notable.amendment_defections} />}
+      {section === 'failed_const'         && <FailedConstList votes={notable.failed_const_amendments} />}
+      {section === 'reversals'            && <ReversalsList reversals={notable.same_bill_reversals} />}
+      {section === 'resolutions'          && <List votes={notable.notable_resolutions} fmt={(v) => `${v.nay} Nay votes on resolution`} />}
     </div>
   );
 }
 
-// ----------------------------------------------------------------------------
-
-function ClosestList({ votes }) {
-  if (votes.length === 0) return <Empty />;
+function List({ votes, fmt }) {
+  if (!votes || votes.length === 0) return <Empty />;
   return (
     <div className="space-y-2">
-      {votes.map((v) => (
-        <VoteCard key={v.bill_vote_id} vote={v} highlight={`Margin: ${Math.abs(v.yea - v.nay)} votes`} />
-      ))}
+      {votes.map((v) => <VoteCard key={v.bill_vote_id} vote={v} highlight={fmt(v)} />)}
     </div>
   );
 }
 
-function DefectionList({ votes, kind }) {
-  if (votes.length === 0) return <Empty />;
+function DefectionList({ votes }) {
+  if (!votes || votes.length === 0) return <Empty />;
   return (
     <div className="space-y-2">
       {votes.map((v) => {
@@ -96,34 +103,42 @@ function DefectionList({ votes, kind }) {
   );
 }
 
-function NotableResolutionsList({ votes }) {
-  if (votes.length === 0) return <Empty />;
+function FailedConstList({ votes }) {
+  if (!votes || votes.length === 0) return <Empty />;
   return (
     <div className="space-y-2">
-      {votes.map((v) => (
-        <VoteCard key={v.bill_vote_id} vote={v} highlight={`${v.nay} Nay votes on resolution`} />
-      ))}
+      {votes.map((v) => {
+        const total = v.yea + v.nay;
+        const pct = total > 0 ? ((v.yea / total) * 100).toFixed(1) : '0';
+        const needed = Math.ceil(total * 2 / 3);
+        const shortBy = needed - v.yea;
+        return (
+          <VoteCard
+            key={v.bill_vote_id}
+            vote={v}
+            highlight={`${pct}% Yea · needed 66.7% (short by ${shortBy} votes)`}
+          />
+        );
+      })}
     </div>
   );
 }
 
 function ReversalsList({ reversals }) {
-  if (reversals.length === 0) return <Empty />;
+  if (!reversals || reversals.length === 0) return <Empty />;
   return (
     <div className="space-y-3">
-      {reversals.map((r) => (
-        <ReversalCard key={r.bill_id} reversal={r} />
-      ))}
+      {reversals.map((r) => <ReversalCard key={r.bill_id} reversal={r} />)}
     </div>
   );
 }
-
-// ----------------------------------------------------------------------------
 
 function VoteCard({ vote, highlight }) {
   const titleTruncated = (vote.title || '').length > 100
     ? vote.title.slice(0, 100).trim() + '…'
     : vote.title;
+  const result = formatPassageResult(vote);
+
   return (
     <div className="p-3 border" style={{
       borderColor: 'var(--rule)', backgroundColor: 'var(--paper)',
@@ -143,6 +158,9 @@ function VoteCard({ vote, highlight }) {
         </div>
 
         <div className="flex-grow min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <CategoryBadge category={vote.vote_category} />
+          </div>
           <div className="text-sm mb-1" title={vote.title} style={{ color: 'var(--ink)' }}>
             {titleTruncated}
           </div>
@@ -153,7 +171,7 @@ function VoteCard({ vote, highlight }) {
           )}
         </div>
 
-        <div className="flex-shrink-0 text-right" style={{ minWidth: 110 }}>
+        <div className="flex-shrink-0 text-right" style={{ minWidth: 130 }}>
           <div className="text-xs tabular-nums">
             <span style={{ color: 'var(--coverage-good)' }}>Y {vote.yea}</span>
             {' · '}
@@ -163,8 +181,8 @@ function VoteCard({ vote, highlight }) {
             Y D{vote.yea_dem}/R{vote.yea_gop} · N D{vote.nay_dem}/R{vote.nay_gop}
           </div>
           <div className="text-[9px] uppercase tracking-wider mt-1"
-            style={{ color: vote.passed ? 'var(--coverage-good)' : 'var(--accent)' }}>
-            {vote.passed ? 'Passed' : 'Failed'}
+            style={{ color: result.color, fontWeight: 600 }}>
+            {result.label}
           </div>
         </div>
       </div>
@@ -187,10 +205,10 @@ function ReversalCard({ reversal }) {
       </div>
       <div className="text-[10px] uppercase tracking-wider mb-1.5"
         style={{ color: 'var(--ink-soft)' }}>
-        Vote sequence
+        Substantive vote sequence
       </div>
       <div className="space-y-1">
-        {reversal.votes.map((v, i) => (
+        {reversal.votes.map((v) => (
           <div key={v.bvid} className="flex items-center gap-3 text-xs"
             style={{ color: 'var(--ink)' }}>
             <span className="tabular-nums w-12" style={{ color: 'var(--ink-soft)' }}>

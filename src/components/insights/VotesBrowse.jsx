@@ -1,11 +1,12 @@
-// VotesBrowse — the workhorse functional tab.
-// Search by bill number, filter by chamber/class/outcome/defection,
-// click row to expand → shows who voted yes/no (loads members.json lazily).
+// VotesBrowse v2 — adds vote_category column, filter, and supermajority-aware passage labels.
 
 import { useState, useMemo } from 'react';
 import { Search, X, ChevronRight, ChevronDown } from 'lucide-react';
 import { useStateData } from '../../lib/useStateData.js';
-import { PartyDot, partyInitial, formatDate, VOTE_LABELS } from './VotesSection.jsx';
+import {
+  PartyDot, partyInitial, formatDate, VOTE_LABELS,
+  CATEGORY_META, CategoryBadge, formatPassageResult,
+} from './VotesSection.jsx';
 
 const PAGE_SIZE = 50;
 
@@ -22,13 +23,23 @@ const CHAMBER_OPTIONS = [
   { key: 'Senate', label: 'Senate only' },
 ];
 
+const CATEGORY_OPTIONS = [
+  { key: 'all',                      label: 'All categories' },
+  { key: 'substantive',              label: 'Substantive (passage)' },
+  { key: 'concurrence',              label: 'Concurrence' },
+  { key: 'constitutional_amendment', label: 'Constitutional amendment' },
+  { key: 'amendment',                label: 'Floor amendments' },
+  { key: 'procedural',               label: 'Procedural motions' },
+  { key: 'consent_calendar',         label: 'Consent calendar' },
+];
+
 export default function VotesBrowse({ abbr, data }) {
   const [search, setSearch] = useState('');
   const [chamber, setChamber] = useState('all');
-  const [billsOnly, setBillsOnly] = useState(true);  // exclude resolutions by default
-  const [excludeConsent, setExcludeConsent] = useState(true);  // exclude consent calendar by default
+  const [billsOnly, setBillsOnly] = useState(true);
+  const [category, setCategory] = useState('all');
   const [hasDefections, setHasDefections] = useState(false);
-  const [outcome, setOutcome] = useState('all'); // 'all' | 'passed' | 'failed'
+  const [outcome, setOutcome] = useState('all');
   const [sortKey, setSortKey] = useState('vote_date_desc');
   const [page, setPage] = useState(0);
 
@@ -38,14 +49,15 @@ export default function VotesBrowse({ abbr, data }) {
       if (q && !`${v.bill_number} ${v.title}`.toLowerCase().includes(q)) return false;
       if (chamber !== 'all' && v.chamber !== chamber) return false;
       if (billsOnly && v.bill_class !== 'bill') return false;
-      if (excludeConsent && v.is_consent_calendar) return false;
+      if (category !== 'all' && v.vote_category !== category) return false;
+      if (category === 'all' && v.vote_category === 'consent_calendar') return false; // default hide
       if (hasDefections && (v.dem_defectors + v.gop_defectors) < 2) return false;
-      if (outcome === 'passed' && !v.passed) return false;
-      if (outcome === 'failed' && v.passed) return false;
+      const effectivelyPassed = v.effectively_passed ?? v.passed;
+      if (outcome === 'passed' && !effectivelyPassed) return false;
+      if (outcome === 'failed' && effectivelyPassed) return false;
       return true;
     });
 
-    // Sort
     if (sortKey === 'vote_date_desc') {
       result.sort((a, b) => b.vote_date.localeCompare(a.vote_date) || b.bill_vote_id - a.bill_vote_id);
     } else if (sortKey === 'closeness_asc') {
@@ -57,7 +69,7 @@ export default function VotesBrowse({ abbr, data }) {
     }
 
     return result;
-  }, [data, search, chamber, billsOnly, excludeConsent, hasDefections, outcome, sortKey]);
+  }, [data, search, chamber, billsOnly, category, hasDefections, outcome, sortKey]);
 
   const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -93,9 +105,8 @@ export default function VotesBrowse({ abbr, data }) {
           )}
         </div>
 
-        <Select value={chamber} onChange={(v) => { setChamber(v); setPage(0); }}
-                options={CHAMBER_OPTIONS} />
-
+        <Select value={chamber} onChange={(v) => { setChamber(v); setPage(0); }} options={CHAMBER_OPTIONS} />
+        <Select value={category} onChange={(v) => { setCategory(v); setPage(0); }} options={CATEGORY_OPTIONS} />
         <Select value={outcome} onChange={(v) => { setOutcome(v); setPage(0); }}
                 options={[
                   { key: 'all',    label: 'All outcomes' },
@@ -105,29 +116,29 @@ export default function VotesBrowse({ abbr, data }) {
 
         <ToggleChip active={billsOnly} onClick={() => { setBillsOnly(!billsOnly); setPage(0); }}
                     label="Bills only" />
-        <ToggleChip active={excludeConsent} onClick={() => { setExcludeConsent(!excludeConsent); setPage(0); }}
-                    label="Exclude consent" />
         <ToggleChip active={hasDefections} onClick={() => { setHasDefections(!hasDefections); setPage(0); }}
                     label="With defections" />
 
         <SortPicker value={sortKey} onChange={setSortKey} />
       </div>
 
-      {/* Results count */}
       <div className="text-xs" style={{ color: 'var(--ink-soft)' }}>
         Showing {pageRows.length.toLocaleString()} of {filtered.length.toLocaleString()} votes
+        {category === 'all' && (
+          <span className="ml-2 italic">· consent calendar hidden by default — select category to see</span>
+        )}
       </div>
 
-      {/* Table */}
       <div>
         <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[10px] uppercase tracking-wider border-b"
           style={{ color: 'var(--ink-soft)', borderColor: 'var(--rule)' }}>
           <div className="col-span-2">Bill / Date</div>
-          <div className="col-span-5">Title</div>
+          <div className="col-span-4">Title</div>
+          <div className="col-span-1">Type</div>
           <div className="col-span-1 text-center">Ch</div>
-          <div className="col-span-2 text-right">Tally</div>
+          <div className="col-span-1 text-right">Tally</div>
           <div className="col-span-1 text-center">Defect</div>
-          <div className="col-span-1 text-right">Result</div>
+          <div className="col-span-2 text-right">Result</div>
         </div>
 
         {pageRows.length === 0 ? (
@@ -167,8 +178,6 @@ export default function VotesBrowse({ abbr, data }) {
   );
 }
 
-// ----------------------------------------------------------------------------
-
 function VoteRow({ vote, abbr, legislatorsMap }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -176,6 +185,7 @@ function VoteRow({ vote, abbr, legislatorsMap }) {
     ? vote.title.slice(0, 70).trim() + '…'
     : vote.title;
   const totalDefectors = vote.dem_defectors + vote.gop_defectors;
+  const result = formatPassageResult(vote);
 
   return (
     <div className="border-b" style={{ borderColor: 'var(--rule)' }}>
@@ -193,23 +203,17 @@ function VoteRow({ vote, abbr, legislatorsMap }) {
             </div>
           </div>
         </div>
-        <div className="col-span-5" title={vote.title}>
+        <div className="col-span-4" title={vote.title}>
           {titleTruncated}
-          {vote.is_consent_calendar && (
-            <span className="text-[9px] uppercase tracking-wider ml-2 px-1.5"
-              style={{
-                backgroundColor: 'var(--paper-warm)',
-                color: 'var(--ink-soft)',
-              }}>
-              consent
-            </span>
-          )}
+        </div>
+        <div className="col-span-1">
+          <CategoryBadge category={vote.vote_category} compact />
         </div>
         <div className="col-span-1 text-center text-[10px]"
           style={{ color: 'var(--ink-soft)' }}>
           {vote.chamber === 'House' ? 'H' : vote.chamber === 'Senate' ? 'S' : '?'}
         </div>
-        <div className="col-span-2 text-right tabular-nums text-xs">
+        <div className="col-span-1 text-right tabular-nums text-xs">
           <span style={{ color: 'var(--coverage-good)' }}>Y {vote.yea}</span>
           {' · '}
           <span style={{ color: 'var(--accent)' }}>N {vote.nay}</span>
@@ -226,9 +230,9 @@ function VoteRow({ vote, abbr, legislatorsMap }) {
             <span style={{ color: 'var(--ink-soft)' }}>—</span>
           )}
         </div>
-        <div className="col-span-1 text-right text-[10px] uppercase tracking-wider"
-          style={{ color: vote.passed ? 'var(--coverage-good)' : 'var(--accent)' }}>
-          {vote.passed ? 'Passed' : 'Failed'}
+        <div className="col-span-2 text-right text-[10px] uppercase tracking-wider"
+          style={{ color: result.color, fontWeight: 600 }}>
+          {result.label}
         </div>
       </div>
 
@@ -238,7 +242,6 @@ function VoteRow({ vote, abbr, legislatorsMap }) {
 }
 
 function VoteDetail({ vote, abbr, legislatorsMap }) {
-  // Lazy-load the members file ONLY when a vote is expanded
   const members = useStateData(abbr, 'votes_members');
 
   if (members.loading) {
@@ -268,29 +271,28 @@ function VoteDetail({ vote, abbr, legislatorsMap }) {
     );
   }
 
-  // Build legislator quick lookup from the legislators data
   const legById = {};
-  for (const l of legislatorsMap.legislators_active) {
-    legById[l.id] = l;
-  }
-  for (const l of legislatorsMap.legislators_inactive) {
-    legById[l.id] = l;
-  }
+  for (const l of legislatorsMap.legislators_active) legById[l.id] = l;
+  for (const l of legislatorsMap.legislators_inactive) legById[l.id] = l;
 
-  // Sort each group by party then name
-  const sortMembers = (pids) => {
-    return pids
-      .map((pid) => legById[pid] || { id: pid, name: `(legislator ${pid})`, party: 'Unknown' })
-      .sort((a, b) => {
-        // Republican first (alphabetical inside party)
-        if (a.party !== b.party) return a.party.localeCompare(b.party);
-        return a.name.localeCompare(b.name);
-      });
-  };
+  const sortMembers = (pids) => pids
+    .map((pid) => legById[pid] || { id: pid, name: `(legislator ${pid})`, party: 'Unknown' })
+    .sort((a, b) => {
+      if (a.party !== b.party) return a.party.localeCompare(b.party);
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <div className="px-9 pb-4 pt-3 space-y-3" style={{ backgroundColor: 'var(--paper-warm)' }}>
-      {/* Party breakdown summary */}
+      <div className="text-[11px] italic mb-1" style={{ color: 'var(--ink-soft)' }}>
+        Vote action: <span style={{ color: 'var(--ink)' }}>{vote.vote_desc}</span>
+        {vote.is_constitutional_amendment && (
+          <span className="ml-2" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+            · Requires 2/3 supermajority
+          </span>
+        )}
+      </div>
+
       <div className="grid grid-cols-4 gap-4 text-xs pb-3 border-b"
         style={{ borderColor: 'var(--rule)' }}>
         <PartyTally label="Dems" yea={vote.yea_dem} nay={vote.nay_dem} party="Democrat" />
@@ -299,7 +301,6 @@ function VoteDetail({ vote, abbr, legislatorsMap }) {
         <Stat label="Absent" value={vote.absent} />
       </div>
 
-      {/* Member lists */}
       <div className="grid grid-cols-2 gap-4">
         <MemberList label={`Yea (${voteMembers.yea.length})`}
                     legs={sortMembers(voteMembers.yea)} accent="var(--coverage-good)" />
@@ -374,8 +375,6 @@ function Stat({ label, value }) {
     </div>
   );
 }
-
-// ----------------------------------------------------------------------------
 
 function ToggleChip({ active, onClick, label }) {
   return (

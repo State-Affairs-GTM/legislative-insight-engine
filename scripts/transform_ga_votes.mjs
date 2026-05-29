@@ -1,21 +1,22 @@
 #!/usr/bin/env node
-// transform_ga_votes.mjs
+// transform_ga_votes.mjs  (v2 — post-Beau-Evans-feedback)
 // ----------------------------------------------------------------------------
 // Reads three CSVs from ~/Downloads:
-//   - ga_votes_overview.csv     (Q4 output: 2,520 rows × 33 cols)
-//   - ga_votes_member_detail.csv (Q5 output: ~280K rows × 3 cols)
-//   - ga_voting_record.csv       (Q6 output: 240 rows × ~20 cols)
+//   - ga_votes_overview.csv      (Q4 v2: now includes vote_category, effectively_passed, is_constitutional_amendment)
+//   - ga_votes_member_detail.csv (Q5: ~280K rows, unchanged)
+//   - ga_voting_record.csv       (Q6 v3: dual headline + per-category defection metrics)
 //
-// Produces three JSON files under src/data/states/ga/:
-//   - votes_overview.json      (Browse tab + Notable Votes feed)
-//   - votes_legislators.json   (By Legislator tab)
-//   - votes_members.json       (Compressed member-vote lookup for drill-downs)
+// Produces three JSON files in src/data/states/ga/:
+//   - votes_overview.json     (Browse + Notable tabs)
+//   - votes_legislators.json  (By Legislator tab + leaderboards)
+//   - votes_members.json      (Per-vote member lookups for drill-down)
 //
-// The transform also computes:
-//   - Per-legislator defection list (which votes did they defect on)
-//   - "Later flipped" flag for each defection (did they vote opposite on the
-//     same bill later?)
-//   - Notable Vote categorization (closest, defection counts, etc.)
+// CHANGES FROM V1:
+//   - Every vote now has a `vote_category` field
+//   - Notable Votes filters use effectively_passed and exclude amendment/procedural
+//   - Each defection in a legislator's drill-down is tagged with its vote_category
+//   - New Notable Votes sub-category: 'constitutional_amendments_failed_supermajority'
+//   - Closeness scoring computed over substantive votes only (procedural closeness was noise)
 //
 // Run from repo root:
 //   node scripts/transform_ga_votes.mjs
@@ -30,8 +31,6 @@ const MEMBERS_CSV   = join(DOWNLOADS, 'ga_votes_member_detail.csv');
 const RECORD_CSV    = join(DOWNLOADS, 'ga_voting_record.csv');
 const OUT_DIR       = join(process.cwd(), 'src/data/states/ga');
 
-// Active-legislator threshold per user spec:
-//   votes_cast >= 100 AND non_vote_pct < 95%
 const ACTIVE_MIN_VOTES = 100;
 const ACTIVE_MAX_NONVOTE_PCT = 95;
 
@@ -63,7 +62,6 @@ function parseCSV(text) {
     .map((r) => Object.fromEntries(headers.map((h, i) => [h, r[i]])));
 }
 
-// BQ comma-formatted numbers → cleanup
 const num = (v) => {
   if (v == null || v === '' || v === 'null') return 0;
   const cleaned = String(v).replace(/,/g, '').trim();
@@ -79,7 +77,7 @@ const str = (v) => v == null ? '' : String(v).trim();
 for (const path of [OVERVIEW_CSV, MEMBERS_CSV, RECORD_CSV]) {
   if (!existsSync(path)) {
     console.error(`✗ Missing input: ${path}`);
-    console.error('  All three CSVs must be saved to ~/Downloads with these exact names:');
+    console.error('  All three CSVs must be in ~/Downloads with these exact names:');
     console.error('    ga_votes_overview.csv');
     console.error('    ga_votes_member_detail.csv');
     console.error('    ga_voting_record.csv');
@@ -100,10 +98,10 @@ console.log(`  ${memberRows.length.toLocaleString()} member-vote rows`);
 console.log(`  ${recordRows.length.toLocaleString()} legislator records`);
 
 // ---------------------------------------------------------------------------
-// BUILD: Vote index (by bill_vote_id) and bill index (by bill_id)
+// BUILD: vote index + bill→votes timeline
 // ---------------------------------------------------------------------------
-const votesByVoteId = {};  // bill_vote_id -> vote object
-const billToVotes = {};    // bill_id -> [bill_vote_id, ...] (chronological)
+const votesByVoteId = {};
+const billToVotes = {};
 
 for (const r of overviewRows) {
   const bvid = num(r.bill_vote_id);
@@ -115,31 +113,39 @@ for (const r of overviewRows) {
     chamber: num(r.chamber_id) === 29 ? 'House' : num(r.chamber_id) === 30 ? 'Senate' : 'Other',
     vote_date: str(r.vote_date),
     vote_desc: str(r.vote_desc),
+    vote_category: str(r.vote_category) || 'other',
     bill_number: str(r.bill_number),
     title: str(r.title),
     bill_class: str(r.bill_class),
     bill_type_id: num(r.bill_type_id),
     status_id: num(r.status_id),
+    is_constitutional_amendment: bool(r.is_constitutional_amendment),
     yea: num(r.yea), nay: num(r.nay), nv: num(r.nv), absent: num(r.absent), total: num(r.total),
-    passed: bool(r.passed),
+    passed_raw: bool(r.passed_raw),
+    effectively_passed: bool(r.effectively_passed),
+    required_threshold: parseFloat(r.required_threshold) || 0.5,
     yea_dem: num(r.yea_dem), nay_dem: num(r.nay_dem), abs_dem: num(r.abs_dem),
     yea_gop: num(r.yea_gop), nay_gop: num(r.nay_gop), abs_gop: num(r.abs_gop),
     yea_oth: num(r.yea_oth), nay_oth: num(r.nay_oth),
     dem_defectors: num(r.dem_defectors),
     gop_defectors: num(r.gop_defectors),
     closeness_score: parseFloat(r.closeness_score) || 0,
-    closeness_percentile: parseFloat(r.closeness_percentile) || 0,
+    closeness_percentile: r.closeness_percentile === '' || r.closeness_percentile == null
+      ? null
+      : parseFloat(r.closeness_percentile),
     is_consent_calendar: bool(r.is_consent_calendar),
     notable_tier: str(r.notable_tier) || null,
     legiscan_url: str(r.legiscan_url),
     state_url: str(r.state_url),
   };
+  // Convenience alias — UIs will use `passed` referring to effectively_passed
+  vote.passed = vote.effectively_passed;
   votesByVoteId[bvid] = vote;
   if (!billToVotes[billId]) billToVotes[billId] = [];
   billToVotes[billId].push(bvid);
 }
 
-// Sort each bill's votes chronologically (by date then bill_vote_id as tiebreak)
+// Sort each bill's votes chronologically
 for (const billId in billToVotes) {
   billToVotes[billId].sort((a, b) => {
     const va = votesByVoteId[a], vb = votesByVoteId[b];
@@ -149,7 +155,7 @@ for (const billId in billToVotes) {
 }
 
 // ---------------------------------------------------------------------------
-// BUILD: legislator index from voting_record CSV
+// BUILD: legislator index from voting_record CSV (v3 with category metrics)
 // ---------------------------------------------------------------------------
 const legislatorsById = {};
 for (const r of recordRows) {
@@ -160,27 +166,39 @@ for (const r of recordRows) {
     party: str(r.party),
     chamber: str(r.chamber),
     district: str(r.district),
+
     votes_cast: num(r.votes_cast),
     votes_missed: num(r.votes_missed),
-    clear_position_votes: num(r.clear_position_votes),
-    party_unity_pct: parseFloat(r.party_unity_pct) || 0,
-    defection_count: num(r.defection_count),
-    defection_pct: parseFloat(r.defection_pct) || 0,
-    votes_cast_bills: num(r.votes_cast_bills),
-    clear_position_votes_bills: num(r.clear_position_votes_bills),
-    party_unity_pct_bills: parseFloat(r.party_unity_pct_bills) || 0,
-    defection_count_bills: num(r.defection_count_bills),
-    defection_pct_bills: parseFloat(r.defection_pct_bills) || 0,
+
+    // Headline metrics (substantive + concurrence on bills)
+    votes_cast_headline: num(r.votes_cast_headline),
+    clear_position_votes_headline: num(r.clear_position_votes_headline),
+    defections_headline: num(r.defections_headline),
+    unity_pct_headline: parseFloat(r.unity_pct_headline) || 0,
+    defection_pct_headline: parseFloat(r.defection_pct_headline) || 0,
+
+    // Per-category breakdowns
+    defections_substantive: num(r.defections_substantive),
+    clear_position_substantive: num(r.clear_position_substantive),
+    defections_concurrence: num(r.defections_concurrence),
+    clear_position_concurrence: num(r.clear_position_concurrence),
+    defections_amendment: num(r.defections_amendment),
+    clear_position_amendment: num(r.clear_position_amendment),
+    defections_procedural: num(r.defections_procedural),
+    clear_position_procedural: num(r.clear_position_procedural),
+
+    // Legacy all-categories (for "broader view" comparison)
+    defections_all: num(r.defections_all),
+    clear_position_all: num(r.clear_position_all),
+    defection_pct_all: parseFloat(r.defection_pct_all) || 0,
   };
 }
 
 // ---------------------------------------------------------------------------
-// COMPUTE: non-vote rate per legislator (needed for "Most Absent" + active filter)
-// We need to scan member detail to count non-votes per person.
+// COMPUTE: non-vote rate from member detail (for "Most Absent" + active filter)
 // ---------------------------------------------------------------------------
 console.log('Computing per-legislator vote counts...');
-const memberStats = {};  // people_id -> { total, voted, nv, absent }
-
+const memberStats = {};
 for (const r of memberRows) {
   const pid = num(r.people_id);
   const voteId = num(r.vote_id);
@@ -193,7 +211,6 @@ for (const r of memberRows) {
   else if (voteId === 4) memberStats[pid].absent++;
 }
 
-// Merge into legislators
 for (const pid in legislatorsById) {
   const stats = memberStats[pid];
   if (stats) {
@@ -208,21 +225,16 @@ for (const pid in legislatorsById) {
     legislatorsById[pid].non_votes = 0;
     legislatorsById[pid].non_vote_pct = 0;
   }
-
-  // Active flag: votes_cast >= 100 AND non_vote_pct < 95%
   const l = legislatorsById[pid];
   l.is_active = l.votes_cast >= ACTIVE_MIN_VOTES && l.non_vote_pct < ACTIVE_MAX_NONVOTE_PCT;
 }
 
 // ---------------------------------------------------------------------------
-// COMPUTE: per-legislator defection drill-down list
-// For each member-vote, determine if it was a defection from clear party position.
-// Then enumerate the defection events per legislator.
+// COMPUTE: defection drill-down with vote_category tags
 // ---------------------------------------------------------------------------
 console.log('Computing defection drill-downs...');
 
-// First, determine each vote's clear party position (from overview data)
-const partyPosition = {};  // bill_vote_id -> { dem: 0|1|2, gop: 0|1|2 }
+const partyPosition = {};
 const THRESHOLD = 0.75;
 for (const r of overviewRows) {
   const bvid = num(r.bill_vote_id);
@@ -240,8 +252,7 @@ for (const r of overviewRows) {
   partyPosition[bvid] = { dem: demPos, gop: gopPos };
 }
 
-// Build member-vote map for fast lookup (later-flip detection)
-// people_id -> bill_id -> [{ bill_vote_id, vote_id, vote_date }, ...]
+// Member-bill history for later-flip detection
 const memberBillHistory = {};
 for (const r of memberRows) {
   const pid = num(r.people_id);
@@ -252,9 +263,9 @@ for (const r of memberRows) {
   if (!memberBillHistory[pid][vote.bill_id]) memberBillHistory[pid][vote.bill_id] = [];
   memberBillHistory[pid][vote.bill_id].push({
     bvid, vote_id: num(r.vote_id), vote_date: vote.vote_date,
+    vote_category: vote.vote_category,
   });
 }
-// Sort each member's per-bill history chronologically
 for (const pid in memberBillHistory) {
   for (const billId in memberBillHistory[pid]) {
     memberBillHistory[pid][billId].sort((a, b) =>
@@ -263,32 +274,32 @@ for (const pid in memberBillHistory) {
   }
 }
 
-// Now enumerate defections per legislator
-const defectionsByLegislator = {};  // people_id -> [defection events]
-
+// Enumerate defections (all categories — UI segments)
+const defectionsByLegislator = {};
 for (const r of memberRows) {
   const pid = num(r.people_id);
   const voteId = num(r.vote_id);
   const bvid = num(r.bill_vote_id);
-  if (voteId !== 1 && voteId !== 2) continue;  // didn't actually vote
+  if (voteId !== 1 && voteId !== 2) continue;
 
   const leg = legislatorsById[pid];
   if (!leg) continue;
-
   const vote = votesByVoteId[bvid];
-  if (!vote || vote.bill_class !== 'bill') continue;  // bills only for defections
+  if (!vote) continue;
+
+  // Include defections on bills AND resolutions; UI filters
+  // Exclude consent_calendar entirely (those are noise)
+  if (vote.vote_category === 'consent_calendar') continue;
 
   const pp = partyPosition[bvid];
   if (!pp) continue;
-
   const partyPos = leg.party === 'Democrat' ? pp.dem : leg.party === 'Republican' ? pp.gop : 0;
-  if (partyPos === 0) continue;  // no clear party position, can't defect
-  if (voteId === partyPos) continue;  // voted with party
+  if (partyPos === 0) continue;
+  if (voteId === partyPos) continue;
 
-  // It's a defection. Build the event.
   if (!defectionsByLegislator[pid]) defectionsByLegislator[pid] = [];
 
-  // Check for later flip: did they vote opposite on the same bill_id later?
+  // Look for later vote-flip on same bill
   let laterFlipped = false;
   let laterVote = null;
   const history = memberBillHistory[pid]?.[vote.bill_id] || [];
@@ -301,6 +312,7 @@ for (const r of memberRows) {
           bvid: history[i].bvid,
           vote_id: history[i].vote_id,
           vote_date: history[i].vote_date,
+          vote_category: history[i].vote_category,
         };
         break;
       }
@@ -315,33 +327,39 @@ for (const r of memberRows) {
     chamber: vote.chamber,
     vote_date: vote.vote_date,
     vote_desc: vote.vote_desc,
-    their_vote: voteId,       // 1=Yea, 2=Nay
-    party_position: partyPos, // 1=Yea, 2=Nay — what party voted
-    passed: vote.passed,
+    vote_category: vote.vote_category,    // NEW — UI can show category badge
+    bill_class: vote.bill_class,
+    is_constitutional_amendment: vote.is_constitutional_amendment,
+    their_vote: voteId,
+    party_position: partyPos,
+    passed: vote.effectively_passed,      // Uses corrected passage logic
     later_flipped: laterFlipped,
     later_vote: laterVote,
   });
 }
 
-// Sort each legislator's defections by date (most recent first)
+// Sort each legislator's defections by date desc
 for (const pid in defectionsByLegislator) {
   defectionsByLegislator[pid].sort((a, b) => b.vote_date.localeCompare(a.vote_date));
 }
 
 // ---------------------------------------------------------------------------
-// COMPUTE: Notable Votes — surface the editorially interesting votes
+// COMPUTE: Notable Votes (filtered by category — substantive only for headline categories)
 // ---------------------------------------------------------------------------
 console.log('Computing Notable Votes...');
 
+const substantiveKinds = new Set(['substantive', 'concurrence', 'constitutional_amendment']);
+
 const closestVotes = Object.values(votesByVoteId)
-  .filter((v) => v.bill_class === 'bill' && !v.is_consent_calendar)
+  .filter((v) => substantiveKinds.has(v.vote_category) && v.bill_class === 'bill')
   .sort((a, b) => a.closeness_score - b.closeness_score)
   .slice(0, 20);
 
 const bigDefectionVotes = Object.values(votesByVoteId)
-  .filter((v) => v.bill_class === 'bill' && (v.gop_defectors >= 3 || v.dem_defectors >= 3))
+  .filter((v) => substantiveKinds.has(v.vote_category)
+              && v.bill_class === 'bill'
+              && (v.gop_defectors >= 3 || v.dem_defectors >= 3))
   .filter((v) => {
-    // Only count as "defection" if the party had a clear position to defect from
     const pp = partyPosition[v.bill_vote_id];
     if (!pp) return false;
     if (v.gop_defectors >= 3 && pp.gop !== 0) return true;
@@ -352,7 +370,7 @@ const bigDefectionVotes = Object.values(votesByVoteId)
   .slice(0, 20);
 
 const mildDefectionVotes = Object.values(votesByVoteId)
-  .filter((v) => v.bill_class === 'bill')
+  .filter((v) => substantiveKinds.has(v.vote_category) && v.bill_class === 'bill')
   .filter((v) => {
     const pp = partyPosition[v.bill_vote_id];
     if (!pp) return false;
@@ -363,27 +381,50 @@ const mildDefectionVotes = Object.values(votesByVoteId)
   .sort((a, b) => b.vote_date.localeCompare(a.vote_date))
   .slice(0, 30);
 
+// Notable Resolutions: substantive resolution votes with dissent OR constitutional amendments
 const notableResolutions = Object.values(votesByVoteId)
-  .filter((v) => v.bill_class === 'resolution' && v.nay >= 3)
+  .filter((v) => v.bill_class === 'resolution'
+              && substantiveKinds.has(v.vote_category)
+              && v.nay >= 3)
   .sort((a, b) => b.nay - a.nay)
   .slice(0, 15);
 
-// Same-bill reversals: bills where a vote passed and a later vote failed (or vice versa)
+// NEW: Constitutional amendments that "passed" simple majority but failed supermajority
+const failedConstAmendments = Object.values(votesByVoteId)
+  .filter((v) => v.is_constitutional_amendment
+              && v.passed_raw === true
+              && v.effectively_passed === false)
+  .sort((a, b) => b.vote_date.localeCompare(a.vote_date))
+  .slice(0, 20);
+
+// NEW: Amendment defections — when 3+ members of one party broke on a floor amendment
+const amendmentDefections = Object.values(votesByVoteId)
+  .filter((v) => v.vote_category === 'amendment'
+              && (v.gop_defectors >= 3 || v.dem_defectors >= 3))
+  .sort((a, b) => (b.gop_defectors + b.dem_defectors) - (a.gop_defectors + a.dem_defectors))
+  .slice(0, 15);
+
+// Same-bill reversals (uses effectively_passed for cleaner signal)
 const sameBillReversals = [];
 for (const billId in billToVotes) {
   const voteIds = billToVotes[billId];
   if (voteIds.length < 2) continue;
-  const passedSequence = voteIds.map((bvid) => votesByVoteId[bvid].passed);
-  // Find any place where passed status flipped
+  // Only consider substantive vote outcomes for reversal detection
+  const substantiveVoteIds = voteIds.filter((id) =>
+    substantiveKinds.has(votesByVoteId[id].vote_category)
+  );
+  if (substantiveVoteIds.length < 2) continue;
+  const passedSequence = substantiveVoteIds.map((bvid) => votesByVoteId[bvid].effectively_passed);
   for (let i = 1; i < passedSequence.length; i++) {
     if (passedSequence[i] !== passedSequence[i - 1]) {
       sameBillReversals.push({
         bill_id: num(billId),
-        votes: voteIds.map((bvid) => ({
+        votes: substantiveVoteIds.map((bvid) => ({
           bvid,
           date: votesByVoteId[bvid].vote_date,
           desc: votesByVoteId[bvid].vote_desc,
-          passed: votesByVoteId[bvid].passed,
+          category: votesByVoteId[bvid].vote_category,
+          passed: votesByVoteId[bvid].effectively_passed,
           yea: votesByVoteId[bvid].yea,
           nay: votesByVoteId[bvid].nay,
         })),
@@ -394,7 +435,6 @@ for (const billId in billToVotes) {
     }
   }
 }
-// Sort by most recent reversal
 sameBillReversals.sort((a, b) => {
   const dateA = a.votes[a.votes.length - 1].date;
   const dateB = b.votes[b.votes.length - 1].date;
@@ -402,8 +442,13 @@ sameBillReversals.sort((a, b) => {
 });
 
 // ---------------------------------------------------------------------------
-// OUTPUT 1: votes_overview.json — Browse + Notable
+// OUTPUT 1: votes_overview.json
 // ---------------------------------------------------------------------------
+const categoryStats = {};
+for (const v of Object.values(votesByVoteId)) {
+  categoryStats[v.vote_category] = (categoryStats[v.vote_category] || 0) + 1;
+}
+
 const overviewOutput = {
   state: 'GA',
   session_id: 2167,
@@ -412,9 +457,11 @@ const overviewOutput = {
   stats: {
     total_votes: Object.keys(votesByVoteId).length,
     bills_voted: new Set(Object.values(votesByVoteId).map((v) => v.bill_id)).size,
-    consent_calendar: Object.values(votesByVoteId).filter((v) => v.is_consent_calendar).length,
+    by_category: categoryStats,
+    consent_calendar: categoryStats.consent_calendar || 0,
     notable_major: Object.values(votesByVoteId).filter((v) => v.notable_tier === 'major').length,
     notable_mild: Object.values(votesByVoteId).filter((v) => v.notable_tier === 'mild').length,
+    constitutional_amendments_failed: failedConstAmendments.length,
   },
   votes: Object.values(votesByVoteId).sort((a, b) =>
     b.vote_date.localeCompare(a.vote_date) || b.bill_vote_id - a.bill_vote_id
@@ -424,6 +471,8 @@ const overviewOutput = {
     big_defections: bigDefectionVotes,
     mild_defections: mildDefectionVotes,
     notable_resolutions: notableResolutions,
+    failed_const_amendments: failedConstAmendments,
+    amendment_defections: amendmentDefections,
     same_bill_reversals: sameBillReversals.slice(0, 30),
   },
 };
@@ -431,9 +480,8 @@ writeFileSync(join(OUT_DIR, 'votes_overview.json'), JSON.stringify(overviewOutpu
 console.log(`  votes_overview.json: ${(Buffer.byteLength(JSON.stringify(overviewOutput)) / 1024).toFixed(0)} KB`);
 
 // ---------------------------------------------------------------------------
-// OUTPUT 2: votes_legislators.json — By Legislator tab + leaderboards
+// OUTPUT 2: votes_legislators.json
 // ---------------------------------------------------------------------------
-// Attach defections to legislators
 for (const pid in legislatorsById) {
   legislatorsById[pid].defections = defectionsByLegislator[pid] || [];
 }
@@ -441,25 +489,27 @@ for (const pid in legislatorsById) {
 const activeLegislators = Object.values(legislatorsById).filter((l) => l.is_active);
 const inactiveLegislators = Object.values(legislatorsById).filter((l) => !l.is_active);
 
-// Leaderboards (computed on active only)
 const topDefectors = [...activeLegislators]
-  .sort((a, b) => b.defection_pct_bills - a.defection_pct_bills)
+  .filter((l) => l.clear_position_votes_headline > 0)
+  .sort((a, b) => b.defection_pct_headline - a.defection_pct_headline)
   .slice(0, 20)
   .map((l) => ({
     id: l.id, name: l.name, party: l.party, chamber: l.chamber,
-    defection_pct_bills: l.defection_pct_bills,
-    defection_count_bills: l.defection_count_bills,
-    party_unity_pct_bills: l.party_unity_pct_bills,
+    defection_pct_headline: l.defection_pct_headline,
+    defections_headline: l.defections_headline,
+    unity_pct_headline: l.unity_pct_headline,
+    defection_pct_all: l.defection_pct_all,
+    defections_all: l.defections_all,
   }));
 
 const mostLoyal = [...activeLegislators]
-  .filter((l) => l.defection_count_bills > 0)  // must have voted on something
-  .sort((a, b) => b.party_unity_pct_bills - a.party_unity_pct_bills)
+  .filter((l) => l.clear_position_votes_headline > 100)
+  .sort((a, b) => b.unity_pct_headline - a.unity_pct_headline)
   .slice(0, 20)
   .map((l) => ({
     id: l.id, name: l.name, party: l.party, chamber: l.chamber,
-    party_unity_pct_bills: l.party_unity_pct_bills,
-    defection_count_bills: l.defection_count_bills,
+    unity_pct_headline: l.unity_pct_headline,
+    defections_headline: l.defections_headline,
   }));
 
 const mostAbsent = [...activeLegislators]
@@ -494,9 +544,7 @@ writeFileSync(join(OUT_DIR, 'votes_legislators.json'), JSON.stringify(legislator
 console.log(`  votes_legislators.json: ${(Buffer.byteLength(JSON.stringify(legislatorsOutput)) / 1024).toFixed(0)} KB`);
 
 // ---------------------------------------------------------------------------
-// OUTPUT 3: votes_members.json — compressed per-vote member breakdown
-// Format: { [bill_vote_id]: { yea: [pid, pid, ...], nay: [...], nv: [...], absent: [...] } }
-// This is the file used when a user expands a vote in the Browse tab.
+// OUTPUT 3: votes_members.json (unchanged structure)
 // ---------------------------------------------------------------------------
 console.log('Building compressed member-vote map...');
 const compressed = {};
@@ -512,7 +560,6 @@ for (const r of memberRows) {
   else if (voteId === 3) compressed[bvid].nv.push(pid);
   else if (voteId === 4) compressed[bvid].absent.push(pid);
 }
-
 const membersOutput = {
   state: 'GA',
   session_id: 2167,
@@ -527,40 +574,45 @@ console.log(`  votes_members.json: ${(Buffer.byteLength(JSON.stringify(membersOu
 // ---------------------------------------------------------------------------
 console.log('');
 console.log('=== STATS ===');
-console.log(`  Total votes:                ${Object.keys(votesByVoteId).length.toLocaleString()}`);
-console.log(`  Active legislators:         ${activeLegislators.length}`);
-console.log(`  Inactive / former:          ${inactiveLegislators.length}`);
+console.log(`  Total votes:                 ${Object.keys(votesByVoteId).length.toLocaleString()}`);
+console.log(`  Active legislators:          ${activeLegislators.length}`);
 console.log('');
-console.log('=== TOP 5 DEFECTORS (by %) ===');
+console.log('=== VOTES BY CATEGORY ===');
+for (const [cat, count] of Object.entries(categoryStats).sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${cat.padEnd(28)} ${count.toLocaleString()}`);
+}
+console.log('');
+console.log('=== TOP 5 DEFECTORS (headline = substantive + concurrence) ===');
 topDefectors.slice(0, 5).forEach((d, i) => {
-  console.log(`  ${i+1}. ${d.name} (${d.party[0]}, ${d.chamber}) — ${d.defection_pct_bills}% defection (${d.defection_count_bills} bills)`);
-});
-console.log('');
-console.log('=== TOP 5 MOST ABSENT (active only) ===');
-mostAbsent.slice(0, 5).forEach((m, i) => {
-  console.log(`  ${i+1}. ${m.name} (${m.party[0]}, ${m.chamber}) — ${m.non_vote_pct}% non-voting`);
-});
-console.log('');
-console.log('=== INACTIVE / FILTERED ===');
-inactiveLegislators.forEach((l) => {
-  console.log(`  - ${l.name} (${l.party[0]}, ${l.chamber}) — ${l.votes_cast} cast, ${l.non_vote_pct}% non-vote (${l.reason})`);
+  console.log(`  ${i+1}. ${d.name} (${d.party[0]}, ${d.chamber}) — ${d.defection_pct_headline}% (${d.defections_headline} defections on substantive)  |  ${d.defection_pct_all}% all categories`);
 });
 console.log('');
 console.log('=== NOTABLE VOTES SAMPLE ===');
-console.log(`  Closest:          ${closestVotes.length} votes`);
-console.log(`  Big defections:   ${bigDefectionVotes.length} votes`);
-console.log(`  Mild defections:  ${mildDefectionVotes.length} votes`);
-console.log(`  Notable resolns:  ${notableResolutions.length} votes`);
-console.log(`  Same-bill reversals: ${sameBillReversals.length} bills`);
+console.log(`  Closest (substantive):           ${closestVotes.length}`);
+console.log(`  Big defections (substantive):    ${bigDefectionVotes.length}`);
+console.log(`  Mild defections (substantive):   ${mildDefectionVotes.length}`);
+console.log(`  Notable resolutions:             ${notableResolutions.length}`);
+console.log(`  Failed const amendments:         ${failedConstAmendments.length}`);
+console.log(`  Amendment defections:            ${amendmentDefections.length}`);
+console.log(`  Same-bill reversals:             ${sameBillReversals.length}`);
 
-// Defection drill-down sample
+if (failedConstAmendments.length > 0) {
+  console.log('');
+  console.log('=== FAILED CONSTITUTIONAL AMENDMENTS (passed simple majority, failed 2/3) ===');
+  failedConstAmendments.slice(0, 5).forEach((v) => {
+    const pct = (v.yea / Math.max(v.yea + v.nay, 1) * 100).toFixed(1);
+    console.log(`  ${v.bill_number} (${v.vote_date}): Y${v.yea}-N${v.nay} (${pct}% < 66.7% needed)  |  ${v.title.slice(0, 60)}`);
+  });
+}
+
 const haPid = Object.values(legislatorsById).find((l) => l.name === 'Sonya Halpern')?.id;
 if (haPid) {
   const haDefects = defectionsByLegislator[haPid] || [];
+  const byCategory = {};
+  haDefects.forEach((d) => { byCategory[d.vote_category] = (byCategory[d.vote_category] || 0) + 1; });
   console.log('');
-  console.log(`=== SONYA HALPERN'S DEFECTIONS (sample): ${haDefects.length} total ===`);
-  haDefects.slice(0, 3).forEach((d) => {
-    const verdict = d.later_flipped ? 'LATER FLIPPED' : 'No later flip';
-    console.log(`  ${d.bill_number} (${d.vote_date}): voted ${d.their_vote === 1 ? 'Yea' : 'Nay'} vs party ${d.party_position === 1 ? 'Yea' : 'Nay'} — ${verdict}`);
+  console.log(`=== HALPERN DEFECTIONS BREAKDOWN: ${haDefects.length} total ===`);
+  Object.entries(byCategory).sort((a, b) => b[1] - a[1]).forEach(([cat, n]) => {
+    console.log(`  ${cat.padEnd(28)} ${n}`);
   });
 }

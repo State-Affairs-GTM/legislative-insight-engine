@@ -1,12 +1,5 @@
-// VotesSection — the GA Votes feature.
-// Three tabs: Browse (functional/filterable), Notable Votes (editorial),
-// By Legislator (defector leaderboard + drill-down).
-//
-// Data loading strategy:
-//   - votes_overview.json loads on mount (used by Browse + Notable tabs)
-//   - votes_legislators.json loads on mount (used by By Legislator tab)
-//   - votes_members.json loads ONLY when a user expands a Browse row
-//     (it's the largest file — no point loading until needed)
+// VotesSection v3 — adds a Methodology tab as 4th top-level subtab.
+// Methodology is visible from anywhere in the Votes section.
 
 import { useState } from 'react';
 import { CheckSquare } from 'lucide-react';
@@ -15,11 +8,13 @@ import { useStateData } from '../../lib/useStateData.js';
 import VotesBrowse from './VotesBrowse.jsx';
 import NotableVotes from './NotableVotes.jsx';
 import VotesByLegislator from './VotesByLegislator.jsx';
+import VotesMethodology from './VotesMethodology.jsx';
 
 const TABS = [
-  { key: 'browse',     label: 'Browse' },
-  { key: 'notable',    label: 'Notable Votes' },
-  { key: 'legislator', label: 'By Legislator' },
+  { key: 'browse',      label: 'Browse' },
+  { key: 'notable',     label: 'Notable Votes' },
+  { key: 'legislator',  label: 'By Legislator' },
+  { key: 'methodology', label: 'Methodology' },
 ];
 
 export default function VotesSection({ abbr }) {
@@ -60,7 +55,6 @@ export default function VotesSection({ abbr }) {
       title="Votes"
       subtitle={`${stats.total_votes.toLocaleString()} roll calls · ${data.legislators.legislators_active.length} active legislators`}
     >
-      {/* Tab nav */}
       <div className="flex items-center gap-0 border-b mb-6"
         style={{ borderColor: 'var(--rule)' }}>
         {TABS.map((t) => {
@@ -84,31 +78,24 @@ export default function VotesSection({ abbr }) {
         })}
       </div>
 
-      {activeTab === 'browse'     && <VotesBrowse abbr={abbr} data={data} />}
-      {activeTab === 'notable'    && <NotableVotes data={data} />}
-      {activeTab === 'legislator' && <VotesByLegislator data={data} />}
+      {activeTab === 'browse'      && <VotesBrowse abbr={abbr} data={data} />}
+      {activeTab === 'notable'     && <NotableVotes data={data} />}
+      {activeTab === 'legislator'  && <VotesByLegislator data={data} />}
+      {activeTab === 'methodology' && <VotesMethodology data={data} />}
 
-      {/* Footer note */}
-<div className="mt-8 pt-4 border-t text-[10px] italic"
-  style={{ borderColor: 'var(--rule)', color: 'var(--ink-soft)' }}>
-  Roll-call vote analysis for the {data.overview.session_label}.
-  A "defection" is defined as voting opposite the majority of one's
-  party on a vote where 75%+ of the party agreed. Party position is
-  derived per-vote from caucus voting patterns, not from external labels.
-  <br /><br />
-  Note: A legislator can be a top bipartisan collaborator (see
-  Legislator Pairs) while having a low defection rate. The two measure
-  different behaviors — collaboration on legislation vs. breaking ranks
-  on floor votes. Sonya Halpern is the clearest example: highest
-  cross-party cosponsorship in GA, but 98.3% party unity on roll calls.
-  Speaker Jon Burns is excluded from voting analytics.
-</div>
+      {/* Footer kept minimal — full methodology now lives in its own tab */}
+      <div className="mt-8 pt-4 border-t text-[10px] italic"
+        style={{ borderColor: 'var(--rule)', color: 'var(--ink-soft)' }}>
+        Roll-call analysis for the {data.overview.session_label}. See the
+        Methodology tab for category definitions, defection scoring rules,
+        and Georgia-specific notes.
+      </div>
     </Section>
   );
 }
 
 // ============================================================================
-// Shared helpers — used by sub-components
+// Shared helpers
 // ============================================================================
 
 export function PartyDot({ party, size = 10 }) {
@@ -133,12 +120,58 @@ export function partyInitial(party) {
        : party?.[0] || '—';
 }
 
-// Format a date string like "March 6, 2026" → "Mar 6, 2026"
 export function formatDate(dateStr) {
   if (!dateStr) return '';
-  // BigQuery exports as "March 6, 2026" — abbreviate the month
   return dateStr.replace(/^(\w{3})\w+/, '$1');
 }
 
-// Vote ID to readable
 export const VOTE_LABELS = { 1: 'Yea', 2: 'Nay', 3: 'Not Voting', 4: 'Absent' };
+
+export const CATEGORY_META = {
+  substantive:              { label: 'Substantive',      short: 'Sub',  color: 'var(--ink)' },
+  concurrence:              { label: 'Concurrence',      short: 'Conc', color: 'var(--ink)' },
+  amendment:                { label: 'Amendment',        short: 'Amend', color: 'var(--warn)' },
+  procedural:               { label: 'Procedural',       short: 'Proc', color: 'var(--ink-soft)' },
+  consent_calendar:         { label: 'Consent Calendar', short: 'Consent', color: 'var(--ink-soft)' },
+  constitutional_amendment: { label: 'Const. Amend.',    short: 'CA',   color: 'var(--accent)' },
+  other:                    { label: 'Other',            short: '—',    color: 'var(--ink-soft)' },
+};
+
+export function CategoryBadge({ category, compact = false }) {
+  const meta = CATEGORY_META[category] || CATEGORY_META.other;
+  return (
+    <span
+      className="inline-block px-1.5 py-0.5 text-[9px] uppercase tracking-wider"
+      style={{
+        backgroundColor: 'var(--paper-warm)',
+        color: meta.color,
+        border: `1px solid ${meta.color}`,
+        opacity: 0.85,
+        fontWeight: 600,
+      }}
+    >
+      {compact ? meta.short : meta.label}
+    </span>
+  );
+}
+
+export const HEADLINE_CATEGORIES = new Set(['substantive', 'concurrence', 'constitutional_amendment']);
+
+export function formatPassageResult(vote) {
+  if (vote.is_constitutional_amendment) {
+    if (vote.effectively_passed) {
+      return { label: 'Passed (2/3)', color: 'var(--coverage-good)' };
+    } else if (vote.passed_raw) {
+      const pct = vote.yea + vote.nay > 0
+        ? ((vote.yea / (vote.yea + vote.nay)) * 100).toFixed(0)
+        : 0;
+      return { label: `Failed (${pct}% < 67%)`, color: 'var(--accent)' };
+    } else {
+      return { label: 'Failed', color: 'var(--accent)' };
+    }
+  }
+  const passed = vote.effectively_passed ?? vote.passed;
+  return passed
+    ? { label: 'Passed', color: 'var(--coverage-good)' }
+    : { label: 'Failed', color: 'var(--accent)' };
+}
