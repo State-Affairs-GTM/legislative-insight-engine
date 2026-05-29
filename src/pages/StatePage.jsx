@@ -16,8 +16,6 @@ import {
 
 const PLACEHOLDER_SECTIONS = [
   { key: 'committees',    title: 'Committees',             icon: Users2,         phase: 'Phase 1' },
-  { key: 'sponsorship',   title: 'Sponsorship',            icon: PenTool,        phase: 'Phase 1' },
-  { key: 'timeline',      title: 'Timeline',               icon: CalendarClock,  phase: 'Phase 1' },
   { key: 'gut-replace',   title: 'Gut & Replace',          icon: RefreshCw,      phase: 'Phase 1' },
   { key: 'history',       title: 'Historical Context',     icon: History,        phase: 'Phase 1' },
   { key: 'nuances',       title: 'State-Specific Nuances', icon: BookOpen,       phase: 'Phase 1' },
