@@ -16,7 +16,6 @@ export default function BillsSection({ abbr, data }) {
     <Section
       icon={ScrollText}
       title="Bills"
-      defaultOpen={true}
       badge={`${data.totals.bills.toLocaleString()} bills`}
     >
       {/* Top of section: type breakdown */}

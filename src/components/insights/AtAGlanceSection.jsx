@@ -39,7 +39,6 @@ export default function AtAGlanceSection({ summary }) {
     <Section
       icon={BarChart3}
       title="At a Glance"
-      defaultOpen={true}
       badge={summary.session_label}
     >
       <HeadlineRow stats={headlineStats} />
