@@ -19,8 +19,8 @@ const OUT_DIR        = join(process.cwd(), 'src/data/states/ga');
 
 const PASSAGE_RATE_VOLUME_FLOOR = 10;
 const LONE_WOLF_MIN_PASSED = 1;
-const NAME_ATTACHER_MIN_COSPONSOR = 100;
-const NAME_ATTACHER_MAX_LEAD = 5;
+const NAME_ATTACHER_MIN_COSPONSOR = 50;
+const NAME_ATTACHER_MIN_RATIO = 20;  // cosponsor:lead ratio threshold
 
 function parseCSV(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
@@ -227,9 +227,16 @@ const loneWolves = [...allLegislators]
   }));
 
 const nameAttachers = [...allLegislators]
-  .filter((l) => l.cosponsor_count_bills >= NAME_ATTACHER_MIN_COSPONSOR
-              && l.lead_count_bills <= NAME_ATTACHER_MAX_LEAD)
-  .sort((a, b) => b.cosponsor_count_bills - a.cosponsor_count_bills)
+  .filter((l) => {
+    if (l.cosponsor_count_bills < NAME_ATTACHER_MIN_COSPONSOR) return false;
+    const ratio = l.cosponsor_count_bills / Math.max(l.lead_count_bills, 1);
+    return ratio >= NAME_ATTACHER_MIN_RATIO;
+  })
+  .sort((a, b) => {
+    const ratioA = a.cosponsor_count_bills / Math.max(a.lead_count_bills, 1);
+    const ratioB = b.cosponsor_count_bills / Math.max(b.lead_count_bills, 1);
+    return ratioB - ratioA;  // sort by ratio desc — most extreme attachers first
+  })
   .slice(0, 15)
   .map((l) => ({
     ...slim(l),
@@ -292,7 +299,7 @@ const notableOut = {
   thresholds: {
     passage_rate_volume_floor: PASSAGE_RATE_VOLUME_FLOOR,
     name_attacher_min_cosponsor: NAME_ATTACHER_MIN_COSPONSOR,
-    name_attacher_max_lead: NAME_ATTACHER_MAX_LEAD,
+    name_attacher_min_ratio: NAME_ATTACHER_MIN_RATIO,
   },
   leaderboards: {
     most_prolific_leaders: mostProlificLeaders,

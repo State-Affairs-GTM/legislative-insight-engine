@@ -154,7 +154,7 @@ export default function SponsorshipMethodology({ data }) {
           <LeaderboardDef name="Lone Wolves"
             description="Primary sponsors who led bills with ZERO cosponsors AND got at least one of those solo-led bills passed. Rare and meaningful — most successful bills have political coalitions behind them. (Note: this metric becomes rare in multi-primary-sponsor states.)" />
           <LeaderboardDef name="Name-Attachers"
-            description={`Legislators with ≥${thresholds.name_attacher_min_cosponsor || 100} cosponsor count and ≤${thresholds.name_attacher_max_lead || 5} primary count. Pattern of attaching one's name broadly to others' bills without primary-sponsoring much.`} />
+            description={`Legislators with ≥${thresholds.name_attacher_min_cosponsor || 50} cosponsorships AND a cosponsor:primary ratio of ${thresholds.name_attacher_min_ratio || 20}:1 or higher. The pattern of attaching one's name broadly to others' bills relative to one's own authoring volume — no hard cap on primary count, just the ratio.`} />
         </div>
       </Section>
 
